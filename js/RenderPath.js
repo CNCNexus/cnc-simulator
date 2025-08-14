@@ -1161,6 +1161,14 @@ function startRenderPath(options, canvas, timeSliderElement, shaderDir, ready) {
             mat4.copy(origRotate, renderPath.getRotate());
         });
 
+        canvas.addEventListener('touchstart', function (e) {
+            e.preventDefault();
+            mouseDown = true;
+            lastX = e.touches[0].pageX;
+            lastY = e.touches[0].pageY;
+            mat4.copy(origRotate, renderPath.getRotate());
+        });
+
         canvas.addEventListener('wheel', function(e) {
           if (e.deltaY !== 0) {
             if (e.deltaY < 0) {
@@ -1183,7 +1191,21 @@ function startRenderPath(options, canvas, timeSliderElement, shaderDir, ready) {
             renderPath.setRotate(m);
         });
 
+        document.addEventListener('touchmove', function (e) {
+            if (!mouseDown)
+                return;
+            e.preventDefault();
+            var m = mat4.create();
+            mat4.rotate(m, m, Math.sqrt((e.touches[0].pageX - lastX) * (e.touches[0].pageX - lastX) + (e.touches[0].pageY - lastY) * (e.touches[0].pageY - lastY)) / 100, [e.touches[0].pageY - lastY, e.touches[0].pageX - lastX, 0]);
+            mat4.multiply(m, m, origRotate);
+            renderPath.setRotate(m);
+        });
+
         document.addEventListener('mouseup', function (e) {
+            mouseDown = false;
+        });
+
+        document.addEventListener('touchend', function (e) {
             mouseDown = false;
         });
 
