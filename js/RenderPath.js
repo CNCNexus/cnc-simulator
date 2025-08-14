@@ -1151,6 +1151,8 @@ function startRenderPath(options, canvas, timeSliderElement, shaderDir, ready) {
         var mouseDown = false;
         var lastX = 0;
         var lastY = 0;
+        var initialPinchDistance = 0;
+        var initialZoom = 1;
 
         var origRotate = mat4.create();
         canvas.addEventListener('mousedown', function (e) {
@@ -1163,23 +1165,31 @@ function startRenderPath(options, canvas, timeSliderElement, shaderDir, ready) {
 
         canvas.addEventListener('touchstart', function (e) {
             e.preventDefault();
-            mouseDown = true;
-            lastX = e.touches[0].pageX;
-            lastY = e.touches[0].pageY;
-            mat4.copy(origRotate, renderPath.getRotate());
+            if (e.touches.length === 1) {
+                mouseDown = true;
+                lastX = e.touches[0].pageX;
+                lastY = e.touches[0].pageY;
+                mat4.copy(origRotate, renderPath.getRotate());
+            } else if (e.touches.length === 2) {
+                mouseDown = false; // To prevent rotation
+                initialPinchDistance = Math.hypot(
+                    e.touches[0].pageX - e.touches[1].pageX,
+                    e.touches[0].pageY - e.touches[1].pageY
+                );
+                initialZoom = renderPath.getZoom();
+            }
         });
 
         canvas.addEventListener('wheel', function(e) {
-          if (e.deltaY !== 0) {
-            if (e.deltaY < 0) {
-              renderPath.setZoom(renderPath.getZoom() - 0.1);
-              //console.log('zoom up '+renderPath.zoom);
-            } else {
-              renderPath.setZoom(renderPath.getZoom() + 0.1);
-              //console.log('zoom down '+renderPath.zoom);
-            }
             e.preventDefault();
-          }
+            if (e.deltaY !== 0) {
+                var zoomFactor = 1.1;
+                if (e.deltaY < 0) { // zoom in
+                  renderPath.setZoom(renderPath.getZoom() / zoomFactor);
+                } else { // zoom out
+                  renderPath.setZoom(renderPath.getZoom() * zoomFactor);
+                }
+            }
         });
 
         document.addEventListener('mousemove', function (e) {
@@ -1192,13 +1202,21 @@ function startRenderPath(options, canvas, timeSliderElement, shaderDir, ready) {
         });
 
         document.addEventListener('touchmove', function (e) {
-            if (!mouseDown)
-                return;
             e.preventDefault();
-            var m = mat4.create();
-            mat4.rotate(m, m, Math.sqrt((e.touches[0].pageX - lastX) * (e.touches[0].pageX - lastX) + (e.touches[0].pageY - lastY) * (e.touches[0].pageY - lastY)) / 100, [e.touches[0].pageY - lastY, e.touches[0].pageX - lastX, 0]);
-            mat4.multiply(m, m, origRotate);
-            renderPath.setRotate(m);
+            if (e.touches.length === 1) {
+                if (!mouseDown) return;
+                var m = mat4.create();
+                mat4.rotate(m, m, Math.sqrt((e.touches[0].pageX - lastX) * (e.touches[0].pageX - lastX) + (e.touches[0].pageY - lastY) * (e.touches[0].pageY - lastY)) / 100, [e.touches[0].pageY - lastY, e.touches[0].pageX - lastX, 0]);
+                mat4.multiply(m, m, origRotate);
+                renderPath.setRotate(m);
+            } else if (e.touches.length === 2 && initialPinchDistance > 0) {
+                var currentPinchDistance = Math.hypot(
+                    e.touches[0].pageX - e.touches[1].pageX,
+                    e.touches[0].pageY - e.touches[1].pageY
+                );
+                var zoomFactor = currentPinchDistance / initialPinchDistance;
+                renderPath.setZoom(initialZoom * zoomFactor);
+            }
         });
 
         document.addEventListener('mouseup', function (e) {
@@ -1207,6 +1225,7 @@ function startRenderPath(options, canvas, timeSliderElement, shaderDir, ready) {
 
         document.addEventListener('touchend', function (e) {
             mouseDown = false;
+            initialPinchDistance = 0;
         });
 
         canvas.addEventListener('resize', function () {
