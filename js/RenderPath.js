@@ -215,6 +215,7 @@ uniform float pathMinZ;
 uniform float pathTopZ;
 uniform mat4 rotate;
 uniform sampler2D heightMap;
+uniform vec2 pan;
 
 attribute vec2 pos0;
 attribute vec2 pos1;
@@ -250,6 +251,7 @@ void main(void) {
     //color.rg = vec2((color.r+color.g)/2.0, (color.r+color.g)/2.0);
 
     vec4 p = vec4(tp.xy, -tp.z*(pathTopZ-pathMinZ)*pathScale, 1.0);
+    p.xy += pan;
 
     mat4 offset = mat4(
         1.0,    0.0,    0.0,    0.0,
@@ -300,6 +302,8 @@ function RenderPath(options, canvas, shaderDir, shadersReady) {
     var canvasAspectX = 1;
     var canvasAspectY = 1;
     self.zoom = 1;
+    self.panX = 0;
+    self.panY = 0;
 
     self.gl = WebGLUtils.setupWebGL(canvas);
 
@@ -372,6 +376,7 @@ function RenderPath(options, canvas, shaderDir, shadersReady) {
         renderHeightMapProgram.pathTopZ = self.gl.getUniformLocation(renderHeightMapProgram, "pathTopZ");
         renderHeightMapProgram.rotate = self.gl.getUniformLocation(renderHeightMapProgram, "rotate");
         renderHeightMapProgram.heightMap = self.gl.getUniformLocation(renderHeightMapProgram, "heightMap");
+        renderHeightMapProgram.pan = self.gl.getUniformLocation(renderHeightMapProgram, "pan");
         renderHeightMapProgram.pos0 = self.gl.getAttribLocation(renderHeightMapProgram, "pos0");
         renderHeightMapProgram.pos1 = self.gl.getAttribLocation(renderHeightMapProgram, "pos1");
         renderHeightMapProgram.pos2 = self.gl.getAttribLocation(renderHeightMapProgram, "pos2");
@@ -815,6 +820,7 @@ function RenderPath(options, canvas, shaderDir, shadersReady) {
         self.gl.uniform1f(renderHeightMapProgram.pathTopZ, pathTopZ);
         self.gl.uniformMatrix4fv(renderHeightMapProgram.rotate, false, rotate);
         self.gl.uniform1i(renderHeightMapProgram.heightMap, 0);
+        self.gl.uniform2f(renderHeightMapProgram.pan, self.panX, self.panY);
 
         self.gl.bindBuffer(self.gl.ARRAY_BUFFER, meshBuffer);
         self.gl.vertexAttribPointer(renderHeightMapProgram.pos0, 2, self.gl.FLOAT, false, meshStride * Float32Array.BYTES_PER_ELEMENT, 0);
@@ -979,7 +985,7 @@ function RenderPath(options, canvas, shaderDir, shadersReady) {
 
         self.gl.uniform2f(basicProgram.aspect, canvasAspectX*self.zoom, canvasAspectY*self.zoom);
         self.gl.uniform3f(basicProgram.scale, cutterDia * pathScale, cutterDia * pathScale, cutterH * pathScale);
-        self.gl.uniform3f(basicProgram.translate, (x + pathXOffset) * pathScale, (y + pathYOffset) * pathScale, (z - pathTopZ) * pathScale);
+        self.gl.uniform3f(basicProgram.translate, (x + pathXOffset) * pathScale + self.panX, (y + pathYOffset) * pathScale + self.panY, (z - pathTopZ) * pathScale);
         self.gl.uniformMatrix4fv(basicProgram.rotate, false, rotate);
 
         if(isVBit) {
@@ -1017,8 +1023,9 @@ function RenderPath(options, canvas, shaderDir, shadersReady) {
         self.gl.enableVertexAttribArray(basicProgram.vColor);
 
         self.gl.uniform2f(basicProgram.aspect, canvasAspectX*self.zoom, canvasAspectY*self.zoom);
-        self.gl.uniform3f(basicProgram.translate, (0 + pathXOffset) * pathScale, (0 + pathYOffset) * pathScale, (0 - pathTopZ) * pathScale);
+        self.gl.uniform3f(basicProgram.translate, (0 + pathXOffset) * pathScale + self.panX, (0 + pathYOffset) * pathScale + self.panY, (0 - pathTopZ) * pathScale);
         self.gl.uniform3f(basicProgram.scale, 1, 1, 1);
+        self.gl.uniformMatrix4fv(basicProgram.rotate, false, rotate);
         //self.gl.uniform3f(basicProgram.translate, 0, 0, 0);
 
         //console.log(self.gl.getParameter(self.gl.ALIASED_LINE_WIDTH_RANGE));
@@ -1096,6 +1103,17 @@ function RenderPath(options, canvas, shaderDir, shadersReady) {
 	}
     }
 
+    self.getPan = function () {
+        return [self.panX, self.panY];
+    }
+
+    self.setPan = function (p) {
+        self.panX = p[0];
+        self.panY = p[1];
+        needToDrawHeightMap = true;
+        requestFrame();
+    }
+
     if (self.gl) {
         loadShader(rasterizePathVertexShaderSrc, self.gl.VERTEX_SHADER, function (shader) {
             rasterizePathVertexShader = shader;
@@ -1149,18 +1167,35 @@ function startRenderPath(options, canvas, timeSliderElement, shaderDir, ready) {
         renderPath.fillPathBuffer([], 0, 0, 180, 0);
 
         var mouseDown = false;
+        var isPanning = false;
         var lastX = 0;
         var lastY = 0;
         var initialPinchDistance = 0;
         var initialZoom = 1;
+        var initialPanX = 0;
+        var initialPanY = 0;
+        var initialCentroidX = 0;
+        var initialCentroidY = 0;
 
         var origRotate = mat4.create();
+
+        canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
         canvas.addEventListener('mousedown', function (e) {
             e.preventDefault();
-            mouseDown = true;
-            lastX = e.pageX;
-            lastY = e.pageY;
-            mat4.copy(origRotate, renderPath.getRotate());
+            if (e.button === 0) {
+                mouseDown = true;
+                lastX = e.pageX;
+                lastY = e.pageY;
+                mat4.copy(origRotate, renderPath.getRotate());
+            } else if (e.button === 2) {
+                isPanning = true;
+                lastX = e.pageX;
+                lastY = e.pageY;
+                var p = renderPath.getPan();
+                initialPanX = p[0];
+                initialPanY = p[1];
+            }
         });
 
         canvas.addEventListener('touchstart', function (e) {
@@ -1177,6 +1212,11 @@ function startRenderPath(options, canvas, timeSliderElement, shaderDir, ready) {
                     e.touches[0].pageY - e.touches[1].pageY
                 );
                 initialZoom = renderPath.getZoom();
+                initialCentroidX = (e.touches[0].pageX + e.touches[1].pageX) / 2;
+                initialCentroidY = (e.touches[0].pageY + e.touches[1].pageY) / 2;
+                var p = renderPath.getPan();
+                initialPanX = p[0];
+                initialPanY = p[1];
             }
         });
 
@@ -1193,12 +1233,16 @@ function startRenderPath(options, canvas, timeSliderElement, shaderDir, ready) {
         });
 
         document.addEventListener('mousemove', function (e) {
-            if (!mouseDown)
-                return;
-            var m = mat4.create();
-            mat4.rotate(m, m, Math.sqrt((e.pageX - lastX) * (e.pageX - lastX) + (e.pageY - lastY) * (e.pageY - lastY)) / 100, [e.pageY - lastY, e.pageX - lastX, 0]);
-            mat4.multiply(m, m, origRotate);
-            renderPath.setRotate(m);
+            if (mouseDown) {
+                var m = mat4.create();
+                mat4.rotate(m, m, Math.sqrt((e.pageX - lastX) * (e.pageX - lastX) + (e.pageY - lastY) * (e.pageY - lastY)) / 100, [e.pageY - lastY, e.pageX - lastX, 0]);
+                mat4.multiply(m, m, origRotate);
+                renderPath.setRotate(m);
+            } else if (isPanning) {
+                var dx = (e.pageX - lastX) * 2 / canvas.width / renderPath.getZoom();
+                var dy = -(e.pageY - lastY) * 2 / canvas.height / renderPath.getZoom();
+                renderPath.setPan([initialPanX + dx, initialPanY + dy]);
+            }
         });
 
         document.addEventListener('touchmove', function (e) {
@@ -1210,17 +1254,26 @@ function startRenderPath(options, canvas, timeSliderElement, shaderDir, ready) {
                 mat4.multiply(m, m, origRotate);
                 renderPath.setRotate(m);
             } else if (e.touches.length === 2 && initialPinchDistance > 0) {
+                // Zoom
                 var currentPinchDistance = Math.hypot(
                     e.touches[0].pageX - e.touches[1].pageX,
                     e.touches[0].pageY - e.touches[1].pageY
                 );
                 var zoomFactor = currentPinchDistance / initialPinchDistance;
                 renderPath.setZoom(initialZoom * zoomFactor);
+
+                // Pan
+                var currentCentroidX = (e.touches[0].pageX + e.touches[1].pageX) / 2;
+                var currentCentroidY = (e.touches[0].pageY + e.touches[1].pageY) / 2;
+                var dx = (currentCentroidX - initialCentroidX) * 2 / canvas.width / renderPath.getZoom();
+                var dy = -(currentCentroidY - initialCentroidY) * 2 / canvas.height / renderPath.getZoom();
+                renderPath.setPan([initialPanX + dx, initialPanY + dy]);
             }
         });
 
         document.addEventListener('mouseup', function (e) {
             mouseDown = false;
+            isPanning = false;
         });
 
         document.addEventListener('touchend', function (e) {
