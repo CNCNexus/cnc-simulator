@@ -25,10 +25,9 @@ Similar project used to be available since 2016-05 at www.cncwebtools.com/Apps/G
  * Limited number of dependencies (jQuery and Bootstrap are no longer needed)
 
 ### TODO
- * Make everything work at mobile devices (responsive and touch)
+ * Weird V-Bit behaviour when Surface Z > 0 (perhaps we should just transpose Z when parsing g-code, and fix origin crosshair...)
+ * Responsive layout to work better on small screens and mobile devices
  * Shaded milling bit
- * weird V-Bit behaviour when Surface Z > 0 (perhaps we should just transpose Z when parsing g-code, and fix origin crosshair...)
- * 3D view translating?
  * Support for mm/inch (bit settings and G21, G20)
  * Support for ball nose and radiused milling bits
  * Tool library and toolchanges (eg. T1 M6)
