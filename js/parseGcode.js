@@ -1,7 +1,7 @@
 // Copyright 2014 Todd Fleming
 // Copyright 2024 Tomas Mudrunka
 //
-// This file was originaly part of jscut.
+// This file was originally part of jscut.
 //
 // jscut is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -54,7 +54,6 @@ function convertRtoIJ(startX, startY, endX, endY, radius, isClockwise) {
     return [ I, J ];
 }
 
-
 var jscut = jscut || {};
 jscut.parseGcode = function (options, gcode, arcPrecision) {
     "use strict";
@@ -77,7 +76,7 @@ jscut.parseGcode = function (options, gcode, arcPrecision) {
             var begin = i;
             while (i < gcode.length && "+-.0123456789".indexOf(gcode[i]) != -1)
                 ++i;
-            return Number(gcode.substr(begin, i - begin));
+            return Number(gcode.slice(begin, i));
         }
         var g = NaN, x = NaN, y = NaN, z = NaN, f = NaN, I = NaN, J = NaN, K = NaN, R = NaN;
         while (i < gcode.length && gcode[i] != ';' && gcode[i] != '\r' && gcode[i] != '\n' && gcode[i] != '(') {
@@ -181,8 +180,8 @@ jscut.parseGcode = function (options, gcode, arcPrecision) {
                 //console.log("INTER: X" + interpX + " Y" + interpY + " Z" + interpZ);
                 path.push(interpX);
                 path.push(interpY);
-                path.push(interpZ);  //FIXME: Assuming Z remains constant for the arc
-                path.push(lastF || 1000);
+                path.push(interpZ); // Z interpolated along arc
+                path.push(lastF || 1000); //Default feedrate
             }
 
             // Update last position to final arc endpoint
