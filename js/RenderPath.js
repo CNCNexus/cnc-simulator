@@ -1,7 +1,7 @@
 // Copyright 2014 Todd Fleming
 // Copyright 2024 Tomas Mudrunka
 //
-// This file was originaly part of jscut.
+// This file was originally part of jscut.
 //
 // jscut is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -397,7 +397,7 @@ function RenderPath(options, canvas, shaderDir, shadersReady) {
         self.gl.linkProgram(basicProgram);
 
         if (!self.gl.getProgramParameter(basicProgram, self.gl.LINK_STATUS)) {
-            alert("Could not initialise RenderHeightMap shaders");
+            alert("Could not initialise Basic shaders");
         }
 
         self.gl.useProgram(basicProgram);
@@ -428,12 +428,13 @@ function RenderPath(options, canvas, shaderDir, shadersReady) {
     var pathVertexesPerLine = 18;
     var pathNumVertexes = 0;
 
-    //These variables are meant to be read by outside world:
+    // Public state read by the rest of the app:
     self.totalTime = 0;
     self.X = 0;
     self.Y = 0;
     self.Z = 0;
 
+    // --- Path buffer: build GPU buffer from path (stride 4: x,y,z,f) ---
     self.fillPathBuffer = function (path, topZ, cutterDiameter, cutterAngle, cutterHeight) {
         if (!rasterizePathProgram || !renderHeightMapProgram || !basicProgram)
             return;
@@ -621,6 +622,7 @@ function RenderPath(options, canvas, shaderDir, shadersReady) {
 
     var pathBuffer;
 
+    // --- Draw path: rasterize path + cutter into heightmap texture ---
     self.drawPath = function () {
         if (!rasterizePathProgram || !renderHeightMapProgram || !basicProgram)
             return;
@@ -721,6 +723,7 @@ function RenderPath(options, canvas, shaderDir, shadersReady) {
     var meshStride = 9;
     var meshNumVertexes = 0;
 
+    // --- Mesh: grid of triangles for height map display ---
     if (self.gl) {
         var numTriangles = resolution * (resolution - 1);
         meshNumVertexes = numTriangles * 3;
@@ -854,6 +857,7 @@ function RenderPath(options, canvas, shaderDir, shadersReady) {
     var cylStride = 6;
     var cylNumVertexes = 0, vbitNumVertexes = 0;
 
+    // --- Cutter and origin geometry (cylinder, V-bit, cross) ---
     if (self.gl) (function () {
         var numDivisions = 40;
         var cylContent = [];
@@ -943,7 +947,7 @@ function RenderPath(options, canvas, shaderDir, shadersReady) {
                 begin = i + 1;
             else
                 end = i;
-        };
+        }
         return end;
     }
 
@@ -1315,7 +1319,7 @@ function startRenderPath(options, canvas, timeSliderElement, shaderDir, ready) {
 
 function startRenderPathDemo() {
     var renderPath;
-    renderPath = startRenderPath({}, document.querySelector("#renderPathCanvas")[0], document.querySelector('#timeSlider'), 'js', function (renderPath) {
+    renderPath = startRenderPath({}, document.querySelector("#renderPathCanvas"), document.querySelector('#timeSlider'), 'js', function (renderPath) {
         fetch("logo-gcode.txt").then((response) => response.text()).then((text) => {
             renderPath.fillPathBuffer(jscut.parseGcode({}, text), 0, .125, 180, 1);
         });
