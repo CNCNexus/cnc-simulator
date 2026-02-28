@@ -1114,6 +1114,16 @@ function RenderPath(options, canvas, shaderDir, shadersReady) {
         requestFrame();
     }
 
+    self.setZoomAndPan = function (z, p) {
+        if (z > 0.000000001) {
+            self.zoom = z;
+        }
+        self.panX = p[0];
+        self.panY = p[1];
+        needToDrawHeightMap = true;
+        requestFrame();
+    }
+
     if (self.gl) {
         loadShader(rasterizePathVertexShaderSrc, self.gl.VERTEX_SHADER, function (shader) {
             rasterizePathVertexShader = shader;
@@ -1179,6 +1189,21 @@ function startRenderPath(options, canvas, timeSliderElement, shaderDir, ready) {
 
         var origRotate = mat4.create();
 
+        function applyRotation(fromX, fromY, toX, toY) {
+            var dist = Math.hypot(toX - fromX, toY - fromY);
+            var m = mat4.create();
+            mat4.rotate(m, m, dist / 100, [toY - fromY, toX - fromX, 0]);
+            mat4.multiply(m, m, origRotate);
+            renderPath.setRotate(m);
+        }
+
+        function screenDeltaToPan(deltaX, deltaY) {
+            return [
+                deltaX * 2 / canvas.width / renderPath.getZoom(),
+                -deltaY * 2 / canvas.height / renderPath.getZoom()
+            ];
+        }
+
         canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
 
         canvas.addEventListener('mousedown', function (e) {
@@ -1234,14 +1259,10 @@ function startRenderPath(options, canvas, timeSliderElement, shaderDir, ready) {
 
         document.addEventListener('mousemove', function (e) {
             if (mouseDown) {
-                var m = mat4.create();
-                mat4.rotate(m, m, Math.sqrt((e.pageX - lastX) * (e.pageX - lastX) + (e.pageY - lastY) * (e.pageY - lastY)) / 100, [e.pageY - lastY, e.pageX - lastX, 0]);
-                mat4.multiply(m, m, origRotate);
-                renderPath.setRotate(m);
+                applyRotation(lastX, lastY, e.pageX, e.pageY);
             } else if (isPanning) {
-                var dx = (e.pageX - lastX) * 2 / canvas.width / renderPath.getZoom();
-                var dy = -(e.pageY - lastY) * 2 / canvas.height / renderPath.getZoom();
-                renderPath.setPan([initialPanX + dx, initialPanY + dy]);
+                var d = screenDeltaToPan(e.pageX - lastX, e.pageY - lastY);
+                renderPath.setPan([initialPanX + d[0], initialPanY + d[1]]);
             }
         });
 
@@ -1249,25 +1270,17 @@ function startRenderPath(options, canvas, timeSliderElement, shaderDir, ready) {
             e.preventDefault();
             if (e.touches.length === 1) {
                 if (!mouseDown) return;
-                var m = mat4.create();
-                mat4.rotate(m, m, Math.sqrt((e.touches[0].pageX - lastX) * (e.touches[0].pageX - lastX) + (e.touches[0].pageY - lastY) * (e.touches[0].pageY - lastY)) / 100, [e.touches[0].pageY - lastY, e.touches[0].pageX - lastX, 0]);
-                mat4.multiply(m, m, origRotate);
-                renderPath.setRotate(m);
+                applyRotation(lastX, lastY, e.touches[0].pageX, e.touches[0].pageY);
             } else if (e.touches.length === 2 && initialPinchDistance > 0) {
-                // Zoom
                 var currentPinchDistance = Math.hypot(
                     e.touches[0].pageX - e.touches[1].pageX,
                     e.touches[0].pageY - e.touches[1].pageY
                 );
                 var zoomFactor = currentPinchDistance / initialPinchDistance;
-                renderPath.setZoom(initialZoom * zoomFactor);
-
-                // Pan
                 var currentCentroidX = (e.touches[0].pageX + e.touches[1].pageX) / 2;
                 var currentCentroidY = (e.touches[0].pageY + e.touches[1].pageY) / 2;
-                var dx = (currentCentroidX - initialCentroidX) * 2 / canvas.width / renderPath.getZoom();
-                var dy = -(currentCentroidY - initialCentroidY) * 2 / canvas.height / renderPath.getZoom();
-                renderPath.setPan([initialPanX + dx, initialPanY + dy]);
+                var d = screenDeltaToPan(currentCentroidX - initialCentroidX, currentCentroidY - initialCentroidY);
+                renderPath.setZoomAndPan(initialZoom * zoomFactor, [initialPanX + d[0], initialPanY + d[1]]);
             }
         });
 
